@@ -1,9 +1,9 @@
-#Requires -Version 7
+#Requires -Version 5
 
 # Version 1.2.8
 
 # check if newer version
-$gistUrl = "https://api.github.com/gists/a208d2bd924691bae7ec7904cab0bd8e"
+$gistUrl = "https://api.github.com/gists/b01b44eaf57400f3bead53baab531de3"
 $latestVersionFile = [System.IO.Path]::Combine("$HOME",'.latest_profile_version')
 $versionRegEx = "# Version (?<version>\d+\.\d+\.\d+)"
 
@@ -15,7 +15,7 @@ if ([System.IO.File]::Exists($latestVersionFile)) {
     $currentVersion = $matches.Version
   }
 
-  if ($latestVersion -gt $currentVersion) {
+  if ([version] $latestVersion -gt $currentVersion) {
     Write-Verbose "Your version: $currentVersion" -Verbose
     Write-Verbose "New version: $latestVersion" -Verbose
     $choice = Read-Host -Prompt "Found newer profile, install? (Y)"
@@ -41,7 +41,7 @@ $profile_initialized = $false
 function prompt {
 
   function Initialize-Profile {
-
+    $isWindows = $true
     $null = Start-ThreadJob -Name "Get version of `$profile from gist" -ArgumentList $gistUrl, $latestVersionFile, $versionRegEx -ScriptBlock {
       param ($gistUrl, $latestVersionFile, $versionRegEx)
     
@@ -61,8 +61,8 @@ function prompt {
       }
     }
     
-    if ((Get-Module PSReadLine).Version -lt 2.2) {
-      throw "Profile requires PSReadLine 2.2+"
+    if ([string] (Get-Module PSReadLine).Version -lt 2.0) {
+      throw "Profile requires PSReadLine 2.0+"
     }
   
     # setup psdrives
@@ -79,7 +79,7 @@ function prompt {
       }
     }
   
-    Set-PSReadLineOption -Colors @{ Selection = "`e[92;7m"; InLinePrediction = "`e[36;7;238m" } -PredictionSource History
+    #Set-PSReadLineOption -Colors @{ Selection = "`e[92;7m"; InLinePrediction = "`e[36;7;238m" } -PredictionSource History
     Set-PSReadLineKeyHandler -Chord Shift+Tab -Function MenuComplete
     Set-PSReadLineKeyHandler -Chord Ctrl+b -Function BackwardWord
     Set-PSReadLineKeyHandler -Chord Ctrl+f -Function ForwardWord
@@ -90,14 +90,14 @@ function prompt {
       Set-PSReadLineKeyHandler -Chord Ctrl+Shift+v -Function Paste
     }
     else {
-      try {
-        Import-UnixCompleters
-      }
-      catch [System.Management.Automation.CommandNotFoundException]
-      {
-        Install-Module Microsoft.PowerShell.UnixCompleters -Repository PSGallery -AcceptLicense -Force
-        Import-UnixCompleters
-      }
+      #try {
+      #  Import-UnixCompleters
+      #}
+      #catch [System.Management.Automation.CommandNotFoundException]
+      #{
+      #  Install-Module Microsoft.PowerShell.UnixCompleters -Repository PSGallery -AcceptLicense -Force
+      #  Import-UnixCompleters
+      #}
     }
   
     # add path to dotnet global tools
@@ -121,15 +121,16 @@ function prompt {
   $currentLastExitCode = $LASTEXITCODE
   $lastSuccess = $?
 
+  $ESC = [char]27
   $color = @{
-    Reset = "`e[0m"
-    Red = "`e[31;1m"
-    Green = "`e[32;1m"
-    Yellow = "`e[33;1m"
-    Grey = "`e[37;0m"
-    White = "`e[37;1m"
-    Invert = "`e[7m"
-    RedBackground = "`e[41m"
+    Reset = "$ESC[0m"
+    Red = "$ESC[31;1m"
+    Green = "$ESC[32;1m"
+    Yellow = "$ESC[33;1m"
+    Grey = "$ESC[37;0m"
+    White = "$ESC[37;1m"
+    Invert = "$ESC[7m"
+    RedBackground = "$ESC[41m"
   }
 
   # set color of PS based on success of last execution
@@ -144,7 +145,7 @@ function prompt {
   $lastCmdTime = ""
   $lastCmd = Get-History -Count 1
   if ($null -ne $lastCmd) {
-    $cmdTime = $lastCmd.Duration.TotalMilliseconds
+    $cmdTime = ($lastCmd.EndExecutionTime - $lastcmd.StartExecutionTime).TotalMilliseconds
     $units = "ms"
     $timeColor = $color.Green
     if ($cmdTime -gt 250 -and $cmdTime -lt 1000) {
@@ -152,15 +153,16 @@ function prompt {
     } elseif ($cmdTime -ge 1000) {
       $timeColor = $color.Red
       $units = "s"
-      $cmdTime = $lastCmd.Duration.TotalSeconds
+      $cmdTime = ($lastCmd.EndExecutionTime - $lastcmd.StartExecutionTime).TotalSeconds
       if ($cmdTime -ge 60) {
         $units = "m"
-        $cmdTIme = $lastCmd.Duration.TotalMinutes
+        $cmdTIme = ($lastCmd.EndExecutionTime - $lastcmd.StartExecutionTime).TotalMinutes
       }
     }
 
     $lastCmdTime = "$($color.Grey)[$timeColor$($cmdTime.ToString("#.##"))$units$($color.Grey)]$($color.Reset) "
   }
+
 
   # get git branch information if in a git folder or subfolder
   $gitBranch = ""
