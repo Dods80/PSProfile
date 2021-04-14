@@ -1,6 +1,6 @@
 #Requires -Version 5
 
-# Version 1.2.8
+# Version 1.3.6
 
 # check if newer version
 $gistUrl = "https://api.github.com/gists/b01b44eaf57400f3bead53baab531de3"
@@ -41,7 +41,7 @@ $profile_initialized = $false
 function prompt {
 
   function Initialize-Profile {
-    $isWindows = $true
+    if ($null -eq $isWindows) {$isWindows = $true}
     $null = Start-ThreadJob -Name "Get version of `$profile from gist" -ArgumentList $gistUrl, $latestVersionFile, $versionRegEx -ScriptBlock {
       param ($gistUrl, $latestVersionFile, $versionRegEx)
     
@@ -61,8 +61,8 @@ function prompt {
       }
     }
     
-    if ([string] (Get-Module PSReadLine).Version -lt 2.0) {
-      throw "Profile requires PSReadLine 2.0+"
+    if ([string] (Get-Module PSReadLine).Version -lt 2.1) {
+      throw "Profile requires PSReadLine 2.1+"
     }
   
     # setup psdrives
@@ -78,11 +78,37 @@ function prompt {
         New-PSDrive -Root D:\ -Name git -PSProvider FileSystem > $Null
       }
     }
-  
-    #Set-PSReadLineOption -Colors @{ Selection = "`e[92;7m"; InLinePrediction = "`e[36;7;238m" } -PredictionSource History
+    
+    $ESC = [char]27
+    $versionMinimum = [Version]'6.1.999'
+    if (($host.Name -eq 'ConsoleHost') -and ($PSVersionTable.PSVersion -ge $versionMinimum))
+    {
+        Set-PSReadLineOption -Colors @{ Selection = "$ESC[92;7m"; InLinePrediction = "$ESC[36;7;238m" } -PredictionSource HistoryAndPlugin
+    } else {
+        Set-PSReadLineOption -Colors @{ Selection = "$ESC[92;7m"; InLinePrediction = "$ESC[36;7;238m" } -PredictionSource History
+    }
     Set-PSReadLineKeyHandler -Chord Shift+Tab -Function MenuComplete
     Set-PSReadLineKeyHandler -Chord Ctrl+b -Function BackwardWord
     Set-PSReadLineKeyHandler -Chord Ctrl+f -Function ForwardWord
+    Set-PSReadLineKeyHandler -Chord DownArrow -Function HistorySearchForward
+    Set-PSReadLineKeyHandler -Chord UpArrow -Function HistorySearchBackward
+    
+    # Sometimes you enter a command but realize you forgot to do something else first.
+    # This binding will let you save that command in the history so you can recall it,
+    # but it doesn't actually execute.  It also clears the line with RevertLine so the
+    # undo stack is reset - though redo will still reconstruct the command line.
+    Set-PSReadLineKeyHandler -Key Alt+w `
+                         -BriefDescription SaveInHistory `
+                         -LongDescription "Save current line in history but do not execute" `
+                         -ScriptBlock {
+        param($key, $arg)
+
+        $line = $null
+        $cursor = $null
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+        [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)
+        [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    }
   
     if ($IsWindows) {
       Set-PSReadLineOption -EditMode Emacs -ShowToolTips
@@ -111,16 +137,33 @@ function prompt {
       }
     }
   
-    $profile_initialized = $true
+    $global:profile_initialized = $true
   }
 
   if (!$profile_initialized) {
     Initialize-Profile
+    Set-PSReadLineKeyHandler -Chord DownArrow -Function HistorySearchForward
+    Set-PSReadLineKeyHandler -Chord UpArrow -Function HistorySearchBackward
+    # Sometimes you enter a command but realize you forgot to do something else first.
+    # This binding will let you save that command in the history so you can recall it,
+    # but it doesn't actually execute.  It also clears the line with RevertLine so the
+    # undo stack is reset - though redo will still reconstruct the command line.
+    Set-PSReadLineKeyHandler -Key Alt+w `
+                         -BriefDescription SaveInHistory `
+                         -LongDescription "Save current line in history but do not execute" `
+                         -ScriptBlock {
+        param($key, $arg)
+
+        $line = $null
+        $cursor = $null
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+        [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)
+        [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    }
   }
 
   $currentLastExitCode = $LASTEXITCODE
   $lastSuccess = $?
-
   $ESC = [char]27
   $color = @{
     Reset = "$ESC[0m"
